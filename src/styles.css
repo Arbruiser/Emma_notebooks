@@ -1,0 +1,1033 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+@import "katex/dist/katex.min.css";
+/* Self-hosted fonts (no request to Google, works offline). */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+/* Syntax highlighting palette is defined below using only LUMI brand colours
+   (no github.css import — that theme ships greens, reds, and oranges that
+   are not part of the LUMI AIF palette). */
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * LUMI AI Factory design tokens.
+ * The ONLY LUMI AIF brand colours (per the brand "Colours" screenshot):
+ *   white   #ffffff  (main)
+ *   black   #231f20  (main, "dark-dark-grey")
+ *   purple  #7477b8  (additional)
+ *   blue    #2c6789  (additional)
+ *   magenta #ec008c  (effect colour)
+ *
+ * Every token below is one of these five colours, or a mix of one of them
+ * with white or black. No other hues (no teal, no green, no light-blue).
+ * Light theme = brand colours mixed with white.
+ * Dark theme  = brand colours mixed with brand black.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* LUMI brand */
+  --color-lumi-purple: var(--lumi-purple);
+  --color-lumi-blue: var(--lumi-blue);
+  --color-lumi-magenta: var(--lumi-magenta);
+  --color-lumi-black: var(--lumi-black);
+  --color-link: var(--link);
+
+  /* Code blocks */
+  --color-code-bg: var(--code-bg);
+  --color-code-border: var(--code-border);
+  --color-inline-code-bg: var(--inline-code-bg);
+  --color-inline-code-fg: var(--inline-code-fg);
+  --color-terminal-bg: var(--terminal-bg);
+  --color-terminal-chrome: var(--terminal-chrome);
+  --color-terminal-border: var(--terminal-border);
+  --color-terminal-fg: var(--terminal-fg);
+  --color-terminal-prompt: var(--terminal-prompt);
+  --color-terminal-prompt-local: var(--terminal-prompt-local);
+  --color-terminal-chrome-fg: var(--terminal-chrome-fg);
+
+  /* Callouts */
+  --color-callout-note-bg: var(--callout-note-bg);
+  --color-callout-note-border: var(--callout-note-border);
+  --color-callout-warning-bg: var(--callout-warning-bg);
+  --color-callout-warning-border: var(--callout-warning-border);
+  --color-callout-info-bg: var(--callout-info-bg);
+  --color-callout-info-border: var(--callout-info-border);
+  --color-callout-tip-bg: var(--callout-tip-bg);
+  --color-callout-tip-border: var(--callout-tip-border);
+  --color-callout-command-bg: var(--callout-command-bg);
+  --color-callout-command-border: var(--callout-command-border);
+
+  /* Quiz */
+  --color-quiz-accent: var(--quiz-accent);
+  --color-quiz-correct: var(--quiz-correct);
+  --color-quiz-wrong: var(--quiz-wrong);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  font-size: 16px;
+}
+@media (min-width: 1280px) {
+  html { font-size: 17px; }
+}
+@media (min-width: 1536px) {
+  html { font-size: 18px; }
+}
+@media (min-width: 1920px) {
+  html { font-size: 19px; }
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* Brand palette (constant across themes) */
+  --lumi-purple: oklch(0.594 0.099 280.92);   /* #7477b8 */
+  --lumi-blue: oklch(0.49 0.082 237.06);      /* #2c6789 */
+  --lumi-magenta: oklch(0.616 0.253 355.14);  /* #ec008c */
+  --lumi-black: oklch(0.244 0.006 0.59);      /* #231f20 */
+
+  /*
+   * The scale. Every token further down points at one of these, and the dark
+   * theme only redefines this block. Light theme: brand mixed with white.
+   * Text colours (--*-text, --n-muted) reach 4.5:1 on every surface they sit
+   * on, also under simulated protanopia, deuteranopia and tritanopia; purple
+   * and magenta are darkened with brand black to get there.
+   */
+  --page-bg: white;
+  --page-fg: var(--lumi-black);
+  --n-surface: color-mix(in oklab, var(--lumi-black) 4%, white);
+  --n-subtle: color-mix(in oklab, var(--lumi-black) 8%, white);
+  --n-border: color-mix(in oklab, var(--lumi-black) 12%, white);
+  --n-muted: color-mix(in oklab, var(--lumi-black) 72%, white);
+  --blue-surface: color-mix(in oklab, var(--lumi-blue) 6%, white);
+  --blue-subtle: color-mix(in oklab, var(--lumi-blue) 15%, white);
+  --blue-border: color-mix(in oklab, var(--lumi-blue) 30%, white);
+  --blue-text: var(--lumi-blue);
+  --purple-surface: color-mix(in oklab, var(--lumi-purple) 6%, white);
+  --purple-subtle: color-mix(in oklab, var(--lumi-purple) 15%, white);
+  --purple-border: color-mix(in oklab, var(--lumi-purple) 30%, white);
+  --purple-text: color-mix(in oklab, var(--lumi-purple) 75%, var(--lumi-black));
+  --magenta-surface: color-mix(in oklab, var(--lumi-magenta) 6%, white);
+  --magenta-subtle: color-mix(in oklab, var(--lumi-magenta) 15%, white);
+  --magenta-border: color-mix(in oklab, var(--lumi-magenta) 30%, white);
+  --magenta-text: color-mix(in oklab, var(--lumi-magenta) 70%, var(--lumi-black));
+
+  --background: var(--page-bg);
+  --foreground: var(--page-fg);
+  --card: var(--page-bg);
+  --card-foreground: var(--foreground);
+  --popover: var(--page-bg);
+  --popover-foreground: var(--foreground);
+  --primary: var(--blue-text);
+  --primary-foreground: var(--page-bg);
+  --secondary: var(--blue-surface);
+  --secondary-foreground: var(--blue-text);
+  --muted: var(--n-surface);
+  --muted-foreground: var(--n-muted);
+  --accent: var(--purple-subtle);
+  --accent-foreground: var(--purple-text);
+  --destructive: var(--lumi-magenta);
+  --destructive-foreground: white;
+  --border: var(--n-border);
+  --input: var(--n-border);
+  --ring: var(--blue-text);
+  --link: var(--blue-text);
+
+  --sidebar: var(--purple-surface);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--blue-text);
+  --sidebar-primary-foreground: var(--page-bg);
+  --sidebar-accent: var(--purple-subtle);
+  --sidebar-accent-foreground: var(--blue-text);
+  --sidebar-border: var(--purple-border);
+  --sidebar-ring: var(--blue-text);
+
+  --code-bg: var(--blue-surface);
+  --code-border: var(--blue-border);
+  --inline-code-bg: var(--n-subtle);
+  --inline-code-fg: var(--blue-text);
+
+  --terminal-bg: #3d0a2c;                       /* classic Ubuntu aubergine */
+  --terminal-chrome: oklch(0.32 0.012 280);     /* Ubuntu titlebar */
+  --terminal-chrome-fg: oklch(0.96 0.005 280);
+  --terminal-border: oklch(0.18 0.04 350);
+  --terminal-fg: #ffffff;
+  /* Lightened so both prompts reach about 7:1 on the aubergine, also under
+     simulated colour blindness. Pure magenta and purple fall below 4.5:1. */
+  --terminal-prompt: color-mix(in oklab, var(--lumi-magenta) 60%, white);      /* user@LUMI */
+  --terminal-prompt-local: color-mix(in oklab, var(--lumi-purple) 60%, white); /* user@laptop */
+
+  --callout-note-bg: var(--purple-surface);
+  --callout-note-border: var(--purple-border);
+  --callout-warning-bg: var(--magenta-surface);
+  --callout-warning-border: var(--magenta-border);
+  /* Info = lighter blue, Tip = deeper blue (same hue, different intensity) */
+  --callout-info-bg: var(--blue-surface);
+  --callout-info-border: var(--blue-border);
+  --callout-tip-bg: var(--blue-subtle);
+  --callout-tip-border: var(--blue-text);
+  --callout-command-bg: var(--n-surface);
+  --callout-command-border: var(--n-border);
+
+  /* Collapsible <details> blocks: purple family, magenta affordance */
+  --details-bg: var(--purple-surface);
+  --details-summary-bg: var(--purple-subtle);
+  --details-summary-bg-hover: color-mix(in oklab, var(--purple-subtle), var(--purple-border));
+  --details-border: var(--purple-border);
+  --details-accent: var(--magenta-text);
+
+  --quiz-card-bg: var(--purple-surface);
+  --quiz-card-border: var(--purple-border);
+  --quiz-header-bg: var(--purple-subtle);
+  --quiz-accent: var(--blue-text);
+  --quiz-correct: oklch(0.52 0.13 165);  /* green */
+  --quiz-wrong: oklch(0.55 0.21 27);     /* red */
+  --quiz-correct-bg: color-mix(in oklab, var(--quiz-correct) 12%, white);
+  --quiz-correct-border: color-mix(in oklab, var(--quiz-correct) 45%, white);
+  --quiz-wrong-bg: color-mix(in oklab, var(--quiz-wrong) 10%, white);
+  --quiz-wrong-border: color-mix(in oklab, var(--quiz-wrong) 42%, white);
+  --quiz-selected-border: var(--purple-text);
+}
+
+
+.dark {
+  /* Dark theme: brand mixed with LUMI black, text colours lifted with white.
+     The base is LUMI black deepened with pure black, so the page is darker
+     than #231f20 but keeps its warm grey tone. */
+  --dark-base: color-mix(in oklab, var(--lumi-black) 75%, black);
+  --page-bg: var(--dark-base);
+  --page-fg: color-mix(in oklab, white 94%, var(--dark-base));
+  --n-surface: color-mix(in oklab, white 5%, var(--dark-base));
+  --n-subtle: color-mix(in oklab, white 10%, var(--dark-base));
+  --n-border: color-mix(in oklab, white 18%, var(--dark-base));
+  --n-muted: color-mix(in oklab, white 68%, var(--dark-base));
+  --blue-surface: color-mix(in oklab, var(--lumi-blue) 14%, var(--dark-base));
+  --blue-subtle: color-mix(in oklab, var(--lumi-blue) 26%, var(--dark-base));
+  --blue-border: color-mix(in oklab, var(--lumi-blue) 50%, var(--dark-base));
+  --blue-text: color-mix(in oklab, var(--lumi-blue) 55%, white);
+  --purple-surface: color-mix(in oklab, var(--lumi-purple) 14%, var(--dark-base));
+  --purple-subtle: color-mix(in oklab, var(--lumi-purple) 26%, var(--dark-base));
+  --purple-border: color-mix(in oklab, var(--lumi-purple) 50%, var(--dark-base));
+  --purple-text: color-mix(in oklab, var(--lumi-purple) 55%, white);
+  --magenta-surface: color-mix(in oklab, var(--lumi-magenta) 14%, var(--dark-base));
+  --magenta-subtle: color-mix(in oklab, var(--lumi-magenta) 26%, var(--dark-base));
+  --magenta-border: color-mix(in oklab, var(--lumi-magenta) 50%, var(--dark-base));
+  --magenta-text: color-mix(in oklab, var(--lumi-magenta) 55%, white);
+
+  /* Raised surfaces are lighter than the page in the dark theme. */
+  --card: var(--n-surface);
+  --popover: var(--n-surface);
+
+  --terminal-chrome: oklch(0.28 0.012 280);
+  --terminal-border: oklch(0.16 0.04 350);
+
+  --quiz-correct: oklch(0.74 0.14 165);  /* green */
+  --quiz-wrong: oklch(0.7 0.2 27);       /* red */
+  --quiz-correct-bg: color-mix(in oklab, var(--quiz-correct) 16%, transparent);
+  --quiz-correct-border: color-mix(in oklab, var(--quiz-correct) 50%, transparent);
+  --quiz-wrong-bg: color-mix(in oklab, var(--quiz-wrong) 16%, transparent);
+  --quiz-wrong-border: color-mix(in oklab, var(--quiz-wrong) 50%, transparent);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+     font-variant-ligatures: none;
+  }
+}
+
+/* ============= Markdown content styling ============= */
+
+.prose-lumi {
+  color: var(--color-foreground);
+  line-height: 1.7;
+  font-size: 1rem;
+  max-width: 78ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.prose-lumi h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 1.5rem;
+  color: var(--color-foreground);
+}
+
+.prose-lumi h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 2.25rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.prose-lumi h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 1.75rem 0 0.5rem;
+}
+
+/* Drop-cap on the first paragraph of a chapter — slightly larger than body
+   text, painted in LUMI magenta. Skipped automatically when the first block
+   is a heading or callout (because :first-of-type only matches paragraphs). */
+.prose-lumi > p:first-of-type::first-letter {
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: 1.6em;
+  font-weight: 700;
+  color: var(--lumi-magenta);
+  line-height: 1;
+  padding-right: 0.04em;
+}
+
+@media (min-width: 1280px) {
+  .prose-lumi p {
+    line-height: 1.78;
+  }
+}
+
+.prose-lumi h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.prose-lumi p,
+.prose-lumi ul,
+.prose-lumi ol {
+  margin: 0.9rem 0;
+}
+
+.prose-lumi ul,
+.prose-lumi ol {
+  padding-left: 1.5rem;
+}
+
+.prose-lumi ul {
+  list-style: disc;
+}
+
+.prose-lumi ol {
+  list-style: decimal;
+}
+
+.prose-lumi li {
+  margin: 0.3rem 0;
+}
+
+.prose-lumi li > p {
+  margin: 0.3rem 0;
+}
+
+.prose-lumi hr {
+  margin: 2.5rem 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.prose-lumi strong {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.prose-lumi table {
+  width: 100%;
+  margin: 1.25rem 0;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.prose-lumi th,
+.prose-lumi td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.prose-lumi th {
+  background: var(--color-muted);
+  font-weight: 600;
+}
+
+.prose-lumi img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.prose-lumi figure {
+  margin: 1.5rem 0;
+}
+
+.prose-lumi figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-muted-foreground);
+  text-align: center;
+}
+
+.prose-lumi h1 a:not(.heading-anchor),
+.prose-lumi h2 a:not(.heading-anchor),
+.prose-lumi h3 a:not(.heading-anchor),
+.prose-lumi h4 a:not(.heading-anchor) {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Heading anchors: appear on hover, copy deep-link to clipboard. */
+.prose-lumi h1,
+.prose-lumi h2,
+.prose-lumi h3,
+.prose-lumi h4 {
+  scroll-margin-top: 5rem;
+  position: relative;
+}
+
+.prose-lumi .heading-anchor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.4em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lumi-magenta);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  text-decoration: none;
+   vertical-align: middle;
+}
+
+.prose-lumi .heading-anchor svg {
+  display: block;
+}
+
+.prose-lumi h1:hover .heading-anchor,
+.prose-lumi h2:hover .heading-anchor,
+.prose-lumi h3:hover .heading-anchor,
+.prose-lumi h4:hover .heading-anchor,
+.prose-lumi .heading-anchor:focus {
+  opacity: 1;
+}
+
+.callout-body p,
+.callout-body ul,
+.callout-body ol {
+  margin: 0.5rem 0;
+}
+
+/* Glossary terms: marked with [[term]] in markdown. Subtle dashed underline
+   in the LUMI link colour signals the word is interactive; magenta on hover. */
+.glossary-term {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: var(--link);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  cursor: help;
+  transition: text-decoration-color 0.15s ease;
+  outline: none;
+}
+
+.glossary-term:hover,
+.glossary-term:focus-visible {
+  text-decoration-color: var(--lumi-magenta);
+}
+
+.glossary-term:focus-visible {
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--lumi-magenta) 45%, transparent);
+}
+
+/* ============= Collapsible <details> blocks =============
+   The <summary> row has to read as a control, not as body text: purple-tinted
+   bar, magenta chevron, and a SHOW / HIDE label on the right edge. */
+.prose-lumi details {
+  margin: 1.5rem 0;
+  border: 1px solid var(--details-border);
+  border-radius: var(--radius-lg);
+  background: var(--details-bg);
+  overflow: hidden;
+}
+
+.prose-lumi details > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 1rem;
+  background: var(--details-summary-bg);
+  color: var(--color-foreground);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+/* WebKit keeps its own triangle even when list-style is none. */
+.prose-lumi details > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron: a square with two borders, rotated. Right when closed, down when open. */
+.prose-lumi details > summary::before {
+  content: "";
+  flex: none;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-left: 0.15rem;
+  border-right: 2.5px solid var(--details-accent);
+  border-bottom: 2.5px solid var(--details-accent);
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 0.2s ease;
+}
+
+.prose-lumi details[open] > summary::before {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.prose-lumi details > summary::after {
+  content: "Show";
+  flex: none;
+  margin-left: auto;
+  padding-left: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--details-accent);
+}
+
+.prose-lumi details[open] > summary::after {
+  content: "Hide";
+}
+
+.prose-lumi details > summary:hover {
+  background: var(--details-summary-bg-hover);
+}
+
+.prose-lumi details > summary:focus-visible {
+  outline: 2px solid var(--details-accent);
+  outline-offset: -2px;
+}
+
+.prose-lumi details[open] > summary {
+  border-bottom: 1px solid var(--details-border);
+}
+
+/* A heading used as the summary title keeps its heading size but drops the
+   block spacing and the h2 underline, so the bar stays a single row. */
+.prose-lumi details > summary > h1,
+.prose-lumi details > summary > h2,
+.prose-lumi details > summary > h3,
+.prose-lumi details > summary > h4,
+.prose-lumi details > summary > h5,
+.prose-lumi details > summary > h6 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* Body content, inset from the card edges. */
+.prose-lumi details > :not(summary) {
+  margin-left: 1.15rem;
+  margin-right: 1.15rem;
+}
+
+.prose-lumi details > summary + * {
+  margin-top: 1rem;
+}
+
+.prose-lumi details > :last-child:not(summary) {
+  margin-bottom: 1rem;
+}
+
+/* ============= Syntax highlighting (LUMI palette only) =============
+   The --*-text colours of the scale, so both themes keep 4.5:1. */
+.hljs {
+  background: transparent !important;
+  color: var(--color-foreground);
+  padding: 0 !important;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-name,
+.hljs-tag,
+.hljs-title,
+.hljs-section {
+  color: var(--blue-text);
+  font-weight: 600;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-literal,
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-regexp {
+  color: var(--magenta-text);
+}
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--purple-text);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-meta,
+.hljs-deletion {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+/* ============= Per-line wrapping for code blocks ============= */
+.code-line {
+  display: block;
+  min-height: 1.5em;
+}
+
+.code-line-hl {
+  background: color-mix(in oklab, var(--lumi-magenta) 12%, transparent);
+  margin: 0 -1rem;
+  padding: 0 1rem;
+  border-left: 2px solid var(--lumi-magenta);
+}
+
+pre.with-line-numbers {
+  counter-reset: ln;
+}
+
+pre.with-line-numbers .code-line {
+  counter-increment: ln;
+}
+
+pre.with-line-numbers .code-line::before {
+  content: counter(ln);
+  display: inline-block;
+  width: 2em;
+  margin-right: 1em;
+  text-align: right;
+  color: color-mix(in oklab, var(--color-foreground) 35%, transparent);
+  user-select: none;
+}
+
+/* ============= Terminal-styled bash code blocks ============= */
+.terminal-block {
+  background: var(--color-terminal-bg);
+}
+
+.terminal-block pre {
+  background: var(--color-terminal-bg) !important;
+  color: var(--color-terminal-fg) !important;
+}
+
+.terminal-block pre code {
+  display: block;
+  counter-reset: tline;
+  color: var(--color-terminal-fg) !important;
+}
+
+.terminal-line {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.terminal-prompt {
+  color: var(--color-terminal-prompt);
+  font-weight: 600;
+  user-select: none;
+}
+
+.terminal-block-local .terminal-prompt {
+  color: var(--color-terminal-prompt-local);
+}
+
+.terminal-command {
+  min-width: 0;
+}
+
+/* Ubuntu-style title bar (flat dark gray, like GNOME headerbar) */
+.terminal-chrome {
+  background: #2c2c2c;
+  color: #ffffff;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.terminal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #4a4a4a;
+  color: #ffffff;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* Brighten hljs tokens inside terminal blocks so they read on the dark bg
+   regardless of theme. */
+.terminal-block .hljs {
+  color: var(--color-terminal-fg) !important;
+}
+
+.terminal-block .hljs-keyword,
+.terminal-block .hljs-selector-tag,
+.terminal-block .hljs-built_in,
+.terminal-block .hljs-name,
+.terminal-block .hljs-tag,
+.terminal-block .hljs-title,
+.terminal-block .hljs-section {
+  color: var(--color-terminal-fg) !important;
+  font-weight: 500;
+}
+
+.terminal-block .hljs-string,
+.terminal-block .hljs-attr,
+.terminal-block .hljs-literal,
+.terminal-block .hljs-number {
+  color: color-mix(in oklab, var(--lumi-magenta) 70%, white) !important;
+}
+
+.terminal-block .hljs-comment,
+.terminal-block .hljs-meta {
+  color: color-mix(in oklab, white 60%, var(--lumi-black)) !important;
+  font-style: italic;
+}
+
+.terminal-block .hljs-variable,
+.terminal-block .hljs-params {
+  color: color-mix(in oklab, var(--lumi-purple) 60%, white) !important;
+}
+
+/* ============= nano editor styled .sh blocks ============= */
+.nano-block {
+  --nano-bg: #1b1b2b;
+  --nano-fg: #e8e8ef;
+  --nano-inverse: #e8e8ef;
+  --nano-inverse-fg: #1b1b2b;
+  background: var(--nano-bg);
+  color: var(--nano-fg);
+  border-color: #33334d;
+}
+
+.nano-block pre {
+  background: var(--nano-bg) !important;
+  color: var(--nano-fg) !important;
+}
+
+.nano-block pre code {
+  display: block;
+  color: var(--nano-fg) !important;
+}
+
+/* nano's titlebar — styled like a terminal header for coherence */
+.nano-titlebar {
+  background: #2c2c2c;
+  color: #ffffff;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.nano-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #4a4a4a;
+  color: #ffffff;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* hljs token colors tuned for the dark nano body */
+.nano-block .hljs,
+.nano-block .hljs-keyword,
+.nano-block .hljs-built_in,
+.nano-block .hljs-name,
+.nano-block .hljs-title,
+.nano-block .hljs-section {
+  color: var(--nano-fg) !important;
+}
+
+.nano-block .hljs-string,
+.nano-block .hljs-attr,
+.nano-block .hljs-literal,
+.nano-block .hljs-number {
+  color: color-mix(in oklab, var(--lumi-magenta) 70%, white) !important;
+}
+
+.nano-block .hljs-comment,
+.nano-block .hljs-meta {
+  color: color-mix(in oklab, white 60%, var(--lumi-black)) !important;
+  font-style: italic;
+}
+
+.nano-block .hljs-variable,
+.nano-block .hljs-params {
+  color: color-mix(in oklab, var(--lumi-purple) 60%, white) !important;
+}
+
+/* ============= Mermaid diagrams ============= */
+/* Same surface and border tokens as regular code blocks, so all boxes on a
+   page share one colour. */
+.mermaid-block {
+  display: flex;
+  justify-content: center;
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-lg);
+  background: var(--code-bg);
+  overflow-x: auto;
+}
+
+.mermaid-block svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Node labels are real HTML inside <foreignObject>, and mermaid sizes every box
+   by measuring that HTML in a scratch container attached to <body>, outside
+   .prose-lumi. The finished SVG then lands here, inside .prose-lumi, where the
+   prose paragraph rules suddenly apply: taller line-height plus 0.9rem of
+   vertical margin make the label taller than the box mermaid already drew for
+   it, so the text spills out the bottom. Pin the label typography back to the
+   values mermaid measured against. */
+.prose-lumi .mermaid-block p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.prose-lumi .mermaid-block strong {
+  font-weight: 700;
+}
+
+/* Mermaid inlines its own theme colour behind arrow labels; forcing it to
+   the box token here guarantees labels always blend into the box, whatever
+   hex mermaid was initialized with. */
+.mermaid-block .edgeLabel,
+.mermaid-block .edgeLabel p,
+.mermaid-block .labelBkg {
+  background-color: var(--code-bg) !important;
+}
+
+.mermaid-block rect.labelBkg {
+  fill: var(--code-bg) !important;
+}
+
+/* Pre-hydration fallback: the diagram source, dimmed, until mermaid loads. */
+.mermaid-loading pre {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+  opacity: 0.7;
+}
+
+.mermaid-error {
+  border-color: color-mix(in oklab, var(--lumi-magenta) 40%, transparent);
+}
+
+.mermaid-error > p:first-child {
+  background: color-mix(in oklab, var(--lumi-magenta) 10%, var(--color-card));
+  border-color: color-mix(in oklab, var(--lumi-magenta) 40%, transparent);
+  color: var(--lumi-magenta);
+}
+
+.mermaid-error > p:last-child {
+  border-color: var(--color-border);
+  color: var(--color-muted-foreground);
+}
+
+/* ---------- Quiz blocks ---------- */
+.quiz-card {
+  background: var(--quiz-card-bg);
+  border-color: var(--quiz-card-border);
+}
+
+.quiz-header {
+  background: var(--quiz-header-bg);
+  border-bottom: 1px solid var(--quiz-card-border);
+}
+
+.quiz-prompt {
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+
+.quiz-option {
+  background: var(--background);
+  border-color: var(--border);
+}
+
+.quiz-option .quiz-marker {
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+
+.quiz-option-selected {
+  border-color: var(--quiz-selected-border);
+}
+
+.quiz-option-selected .quiz-marker {
+  border-color: var(--quiz-selected-border);
+  color: var(--quiz-accent);
+}
+
+.quiz-option-correct {
+  background: var(--quiz-correct-bg);
+  border-color: var(--quiz-correct-border);
+}
+
+.quiz-option-correct .quiz-marker {
+  border-color: var(--quiz-correct);
+  color: var(--quiz-correct);
+}
+
+.quiz-option-correct .quiz-marker-filled {
+  background: var(--quiz-correct);
+  border-color: var(--quiz-correct);
+  color: oklch(1 0 0);
+}
+
+.quiz-option-wrong {
+  background: var(--quiz-wrong-bg);
+  border-color: var(--quiz-wrong-border);
+}
+
+.quiz-option-wrong .quiz-marker {
+  border-color: var(--quiz-wrong);
+  color: var(--quiz-wrong);
+}
+
+.quiz-option-wrong .quiz-marker-filled {
+  background: var(--quiz-wrong);
+  border-color: var(--quiz-wrong);
+  color: oklch(1 0 0);
+}
+
+/* The option(s) the reader actually picked get a clear ring + badge. */
+.quiz-option-chosen {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.quiz-option-correct.quiz-option-chosen {
+  color: var(--quiz-correct);
+}
+
+.quiz-option-wrong.quiz-option-chosen {
+  color: var(--quiz-wrong);
+}
+
+.quiz-chosen-badge {
+  background: color-mix(in oklab, currentColor 18%, transparent);
+  color: currentColor;
+}
+
+.quiz-btn {
+  background: var(--quiz-accent);
+  color: var(--background);
+  transition: opacity 0.15s ease;
+}
+
+.quiz-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.quiz-btn-secondary {
+  background: transparent;
+  color: var(--quiz-accent);
+  border: 1px solid var(--quiz-card-border);
+  transition: background-color 0.15s ease;
+}
+
+.quiz-btn-secondary:hover {
+  background: color-mix(in oklab, var(--quiz-accent) 12%, transparent);
+}
+
+.prose-lumi .quiz-card ul {
+  list-style: none !important;
+  margin: 0;
+  padding-left: 0;
+}
+
+.prose-lumi .quiz-card li {
+  padding-left: 0;
+  margin: 0;
+}
+
+.prose-lumi .quiz-card li::marker {
+  content: "";
+}
