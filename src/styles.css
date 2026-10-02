@@ -443,6 +443,11 @@ html {
   position: relative;
 }
 
+/* A bare `<a id>` target (common in notebooks) clears the sticky header too. */
+.prose-lumi a[id] {
+  scroll-margin-top: 5rem;
+}
+
 .prose-lumi .heading-anchor {
   display: inline-flex;
   align-items: center;

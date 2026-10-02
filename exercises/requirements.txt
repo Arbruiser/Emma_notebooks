@@ -1,0 +1,6 @@
+openai==1.66.5
+langchain==0.3.27
+sentence-transformers==5.1.0
+transformers==4.55.4
+aitta-client
+faiss-cpu==1.12.0

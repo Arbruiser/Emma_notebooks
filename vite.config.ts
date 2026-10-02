@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join, relative } from "node:path";
+import { extname, join, normalize, relative } from "node:path";
 import type { Plugin } from "vite";
 // Note: do NOT import ./src/lib/site here — it reads import.meta.env, which is
 // undefined when vite.config.ts itself runs in Node, and would crash the build.
@@ -13,21 +13,47 @@ import type { Plugin } from "vite";
 // file and the app split markdown into pages by exactly the same rule.
 import { pageSlugs } from "./src/lib/page-blocks";
 import { isNotebookPath, notebookToMarkdown } from "./src/lib/notebook";
+import {
+  EXERCISES_DIR,
+  exercisesMarkdown,
+  exercisesSlug,
+  isExercisesPath,
+} from "./src/lib/exercises";
 
 const basePath = process.env.VITE_BASE_PATH || "/";
 
-/** Every file in `content/` that is a page: markdown, or a Jupyter notebook. */
-function walkPages(dir: string, out: string[] = []): string[] {
+/**
+ * Every file below `dir`, skipping hidden entries such as the
+ * `.ipynb_checkpoints/` folders Jupyter leaves behind.
+ */
+function walkFiles(dir: string, out: string[] = []): string[] {
+  if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
+    if (name.startsWith(".")) continue;
     const full = join(dir, name);
-    const s = statSync(full);
-    if (s.isDirectory()) walkPages(full, out);
-    else if (name.endsWith(".md") || isNotebookPath(name)) out.push(full);
+    if (statSync(full).isDirectory()) walkFiles(full, out);
+    else out.push(full);
   }
   return out;
 }
 
+function isPageFile(filePath: string): boolean {
+  return filePath.endsWith(".md") || isNotebookPath(filePath);
+}
+
+/** Every file that is a page: markdown or a Jupyter notebook, in `content/`
+ *  or in `exercises/`. */
+function walkPages(): string[] {
+  return [...walkFiles("content"), ...walkFiles(EXERCISES_DIR)].filter(isPageFile);
+}
+
+/** Path relative to the repository root, with forward slashes. */
+function repoPath(filePath: string): string {
+  return relative(process.cwd(), filePath).replace(/\\/g, "/");
+}
+
 function fileToSlug(filePath: string): string {
+  if (isExercisesPath(repoPath(filePath))) return exercisesSlug(repoPath(filePath));
   const rel = relative("content", filePath).replace(/\\/g, "/").replace(/\.(md|ipynb)$/, "");
   return rel === "index" ? "" : rel;
 }
@@ -39,6 +65,7 @@ function fileToSlug(filePath: string): string {
  */
 function pageMarkdown(filePath: string, onImage?: (fileName: string) => void): string {
   const raw = readFileSync(filePath, "utf-8");
+  if (isExercisesPath(repoPath(filePath))) return exercisesMarkdown(raw, repoPath(filePath));
   if (!isNotebookPath(filePath)) return raw;
   const rel = relative("content", filePath).replace(/\\/g, "/");
   return notebookToMarkdown(raw, rel, undefined, { onImage });
@@ -70,7 +97,7 @@ function notebookImagesPlugin(): Plugin {
       if (reported) return;
       reported = true;
       const missing = new Map<string, Set<string>>();
-      for (const filePath of walkPages("content").filter(isNotebookPath)) {
+      for (const filePath of walkFiles("content").filter(isNotebookPath)) {
         const rel = relative("content", filePath).replace(/\\/g, "/");
         pageMarkdown(filePath, (fileName) => {
           if (existsSync(join("public", "assets", fileName))) return;
@@ -87,6 +114,79 @@ function notebookImagesPlugin(): Plugin {
     },
   };
 }
+
+/**
+ * Publish the files of `exercises/` at their own paths, so a picture the
+ * notebooks show as `./images/plot.png` is served at
+ * `<site>/exercises/images/plot.png`, and a data file or the notebook itself can
+ * be downloaded from beside the page that links to it. In dev the files are
+ * served straight from the folder, so a change shows on the next reload.
+ *
+ * Also warns, once per build, about any file an exercise page links to that is
+ * missing, since the page would build fine and the link would simply be dead.
+ */
+function exercisesFilesPlugin(): Plugin {
+  let reported = false;
+  return {
+    name: "lumi-exercises-files",
+    buildStart() {
+      if (reported) return;
+      reported = true;
+      for (const filePath of walkFiles(EXERCISES_DIR).filter(isPageFile)) {
+        const missing = new Set<string>();
+        exercisesMarkdown(readFileSync(filePath, "utf-8"), repoPath(filePath), undefined, {
+          onFile: (target) => {
+            const published = isExercisesPath(target) || target.startsWith("public/");
+            if (!published || !existsSync(target)) missing.add(target);
+          },
+        });
+        if (missing.size) {
+          console.warn(
+            `[content] ${repoPath(filePath)}: links to ${[...missing].join(", ")}, which is not in exercises/ (or public/), so the link or picture is broken on the site.`,
+          );
+        }
+      }
+    },
+    configureServer(server) {
+      const prefix = joinUrl(basePath, `${EXERCISES_DIR}/`);
+      server.middlewares.use((req, res, next) => {
+        const url = decodeURIComponent((req.url ?? "").split(/[?#]/, 1)[0]);
+        if (!url.startsWith(prefix)) return next();
+        const file = normalize(join(EXERCISES_DIR, url.slice(prefix.length))).replace(/\\/g, "/");
+        // Outside the folder, or a README (a page, served by the app): not ours.
+        if (!file.startsWith(`${EXERCISES_DIR}/`) || file.endsWith(".md")) return next();
+        if (!existsSync(file) || !statSync(file).isFile()) return next();
+        const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
+        res.setHeader("Content-Type", type);
+        res.end(readFileSync(file));
+      });
+    },
+    // The client build is what gets published; the server build needs none of it.
+    applyToEnvironment: (environment) => environment.name === "client",
+    generateBundle() {
+      for (const file of walkFiles(EXERCISES_DIR)) {
+        // A README is a page, not a download; everything else ships as is.
+        if (file.endsWith(".md")) continue;
+        this.emitFile({ type: "asset", fileName: repoPath(file), source: readFileSync(file) });
+      }
+    },
+  };
+}
+
+/** Content types for the files the dev server hands out from `exercises/`. */
+const MIME: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+  ".txt": "text/plain; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".json": "application/json",
+  ".ipynb": "application/x-ipynb+json",
+  ".pdf": "application/pdf",
+};
 
 function joinUrl(a: string, b: string) {
   return `${a.replace(/\/$/, "")}/${b.replace(/^\//, "")}`;
@@ -115,7 +215,7 @@ function sitemapPlugin(): Plugin {
     apply: "build",
     closeBundle() {
       try {
-        const files = walkPages("content");
+        const files = walkPages();
         const base = (process.env.VITE_SITE_URL || "").replace(/\/$/, "");
         if (!base) return;
         const urls = files.flatMap((f) => {
@@ -150,7 +250,7 @@ function sitemapPlugin(): Plugin {
 // sidebar item highlighted — instead of falling back to the "/" shell (which
 // would always show the first/home chapter as active until JS hydrates).
 function contentPages() {
-  const slugs = walkPages("content").flatMap(slugsInFile);
+  const slugs = walkPages().flatMap(slugsInFile);
   const paths = new Set<string>(["/"]);
   for (const slug of slugs) paths.add(slug === "" ? "/" : `/${slug}/`);
   return Array.from(paths).map((path) => ({
@@ -200,6 +300,7 @@ export default defineConfig({
     }),
     viteReact(),
     notebookImagesPlugin(),
+    exercisesFilesPlugin(),
     sitemapPlugin(),
   ],
 });

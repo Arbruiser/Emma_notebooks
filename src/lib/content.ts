@@ -1,5 +1,6 @@
 import { blockSlug, splitPageBlocks } from "./page-blocks";
 import { isNotebookPath, notebookToMarkdown } from "./notebook";
+import { EXERCISES_SLUG, exercisesMarkdown, exercisesSlug, isExercisesPath } from "./exercises";
 
 /**
  * Let authors size a collapsible title with normal markdown:
@@ -63,13 +64,22 @@ export interface Page {
   parentSlug?: string;
 }
 
-const rawModules = import.meta.glob("/content/**/*.{md,ipynb}", {
+const rawModules = import.meta.glob(["/content/**/*.{md,ipynb}", "/exercises/**/*.{md,ipynb}"], {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
+/** True when `exercises/` has a README.md, the page its other pages nest under. */
+const hasExercisesSection = Object.keys(rawModules).some(
+  (filePath) =>
+    isExercisesPath(filePath.slice(1)) && exercisesSlug(filePath.slice(1)) === EXERCISES_SLUG,
+);
+
 function fileToSlug(filePath: string): string {
+  // "/exercises/README.md" -> "exercises"
+  // "/exercises/07_rag.ipynb" -> "exercises/07_rag"
+  if (isExercisesPath(filePath.slice(1))) return exercisesSlug(filePath.slice(1));
   // "/content/index.md" -> ""
   // "/content/chapter1.md" -> "chapter1"
   // "/content/sub/page.md" -> "sub/page"
@@ -86,15 +96,27 @@ function fileToSlug(filePath: string): string {
  *
  * A `.ipynb` file is a page too: it is converted to markdown on the way in and
  * is indistinguishable from a `.md` file from here on.
+ *
+ * The `exercises/` folder is read the same way, as a section of its own: see
+ * `exercises.ts`.
  */
 export const pages: Page[] = Object.entries(rawModules)
   .flatMap(([filePath, raw]) => {
     const path = filePath.replace(/^\//, "");
     const fileSlug = fileToSlug(filePath);
     const warn = (message: string) => console.warn(`[content] ${path}: ${message}`);
-    const text = isNotebookPath(filePath)
-      ? notebookToMarkdown(raw, filePath.replace(/^\/content\//, ""), warn)
-      : raw;
+    const inExercises = isExercisesPath(path);
+    const text = inExercises
+      ? exercisesMarkdown(raw, path, warn)
+      : isNotebookPath(filePath)
+        ? notebookToMarkdown(raw, filePath.replace(/^\/content\//, ""), warn)
+        : raw;
+    // Every exercise page sits under the section's own page (its README),
+    // unless its front matter names a different `parent`.
+    const sectionParent =
+      inExercises && hasExercisesSection && fileSlug !== EXERCISES_SLUG
+        ? { parentSlug: EXERCISES_SLUG }
+        : {};
     const blocks = splitPageBlocks(text, warn);
     return blocks.map((block, i) => ({
       slug: i === 0 ? fileSlug : blockSlug(block.data, fileSlug, i),
@@ -103,7 +125,7 @@ export const pages: Page[] = Object.entries(rawModules)
       body: expandSummaryHeadings(block.content),
       // Written inside `fileSlug`'s file, so it hangs under that page. Sorting
       // below is stable, which keeps blocks in the order they were written.
-      ...(i === 0 ? {} : { parentSlug: fileSlug }),
+      ...(i === 0 ? (block.data.parent ? {} : sectionParent) : { parentSlug: fileSlug }),
     }));
   })
   .sort((a, b) => (a.frontmatter.nav_order ?? 999) - (b.frontmatter.nav_order ?? 999));

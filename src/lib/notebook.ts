@@ -82,7 +82,7 @@ function stripInlineMarkdown(text: string): string {
  * an example never wins. Kept here rather than imported from `content.ts`,
  * which reads `import.meta` and so cannot be loaded by `vite.config.ts`.
  */
-function firstHeading(body: string): string {
+export function firstHeading(body: string): string {
   let fence = "";
   for (const line of body.split("\n")) {
     const marker = line.match(/^[ \t]*(`{3,}|~{3,})/);
@@ -168,37 +168,16 @@ const HTML_IMAGE_SRC = /(<img\b[^>]*?\bsrc[ \t]*=[ \t]*")([^"]+)/gi;
 const INLINE_CODE = /`+[^`]*`+/g;
 
 /** Paths that already point somewhere definite and must not be rewritten. */
-function isFixedUrl(url: string): boolean {
+export function isFixedUrl(url: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("/") || url.startsWith("#");
 }
 
 /**
- * Point a notebook's picture files at `public/assets/`, where every other
- * picture on the site lives.
- *
- * Jupyter writes `./images/plot.png`, meaning a file in a folder beside the
- * notebook. The author moves those files into `public/assets/` once, and this
- * rewrites the paths to match, so the notebook itself is never edited. Only the
- * file name is kept, so it makes no difference which folder Jupyter had them
- * in. A picture pasted into a cell has already become a `data:` URL by this
- * point and is left alone, as is anything with an address of its own.
- *
- * Code is left exactly as written, fenced and inline alike, so a cell that
- * documents the syntax rather than using it keeps the path it typed.
+ * Apply `rewrite` to the prose of a markdown text, never to its code. Fenced
+ * blocks and inline-code spans are passed through exactly as written, so a cell
+ * that documents a syntax rather than using it keeps what it typed.
  */
-function relocateImages(text: string, onImage?: (fileName: string) => void): string {
-  const move = (url: string): string => {
-    if (isFixedUrl(url)) return url;
-    const fileName = url.split(/[?#]/, 1)[0].split("/").pop() ?? "";
-    if (!fileName) return url;
-    onImage?.(fileName);
-    return `./assets/${fileName}`;
-  };
-  const rewrite = (prose: string): string =>
-    prose
-      .replace(MARKDOWN_IMAGE, (_all, before: string, url: string) => before + move(url))
-      .replace(HTML_IMAGE_SRC, (_all, before: string, url: string) => before + move(url));
-
+export function rewriteOutsideCode(text: string, rewrite: (prose: string) => string): string {
   let fence = "";
   return text
     .split("\n")
@@ -222,6 +201,32 @@ function relocateImages(text: string, onImage?: (fileName: string) => void): str
     .join("\n");
 }
 
+/**
+ * Point a notebook's picture files at `public/assets/`, where every other
+ * picture on the site lives.
+ *
+ * Jupyter writes `./images/plot.png`, meaning a file in a folder beside the
+ * notebook. The author moves those files into `public/assets/` once, and this
+ * rewrites the paths to match, so the notebook itself is never edited. Only the
+ * file name is kept, so it makes no difference which folder Jupyter had them
+ * in. A picture pasted into a cell has already become a `data:` URL by this
+ * point and is left alone, as is anything with an address of its own.
+ */
+function relocateImages(text: string, onImage?: (fileName: string) => void): string {
+  const move = (url: string): string => {
+    if (isFixedUrl(url)) return url;
+    const fileName = url.split(/[?#]/, 1)[0].split("/").pop() ?? "";
+    if (!fileName) return url;
+    onImage?.(fileName);
+    return `./assets/${fileName}`;
+  };
+  return rewriteOutsideCode(text, (prose) =>
+    prose
+      .replace(MARKDOWN_IMAGE, (_all, before: string, url: string) => before + move(url))
+      .replace(HTML_IMAGE_SRC, (_all, before: string, url: string) => before + move(url)),
+  );
+}
+
 /** `nav_order` as a number, whether or not the author quoted it in the YAML. */
 function asNavOrder(value: unknown): number | undefined {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
@@ -234,7 +239,7 @@ function quote(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-function toFrontMatter(fields: Record<string, unknown>): string {
+export function toFrontMatter(fields: Record<string, unknown>): string {
   const lines = ["---"];
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || value === null || value === "") continue;
@@ -265,6 +270,10 @@ export interface NotebookOptions {
   /** Called with the file name of every image the notebook expects to find in
    *  `public/assets/`, so the build can check it is actually there. */
   onImage?: (fileName: string) => void;
+  /** Leave picture paths as the notebook wrote them instead of pointing them
+   *  at `public/assets/`. For a folder whose files are served from where they
+   *  are, such as `exercises/`, which rewrites every path itself. */
+  keepImagePaths?: boolean;
 }
 
 /**
@@ -334,7 +343,10 @@ export function notebookToMarkdown(
         }
       }
       if (!markdownText.trim()) continue;
-      parts.push(relocateImages(inlineAttachments(markdownText, cell.attachments), options?.onImage).trim());
+      const inlined = inlineAttachments(markdownText, cell.attachments);
+      parts.push(
+        (options?.keepImagePaths ? inlined : relocateImages(inlined, options?.onImage)).trim(),
+      );
       continue;
     }
     if (cell.cell_type === "code") {

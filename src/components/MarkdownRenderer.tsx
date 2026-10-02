@@ -498,7 +498,10 @@ export function MarkdownRenderer({ source, enableGlossary = true }: MarkdownRend
             }
             return <code className={className}>{children}</code>;
           },
-          a({ href, children }) {
+          a({ href, id, children }) {
+            // A link target with no address, `<a id="setup"></a>`, is how
+            // Jupyter notebooks mark a place to jump to. Keep it a bare target.
+            if (!href) return <a id={id}>{children}</a>;
             const className =
               "text-link underline-offset-2 hover:text-lumi-magenta hover:underline";
             // External, protocol-relative, mailto/tel, and pure-hash links stay
