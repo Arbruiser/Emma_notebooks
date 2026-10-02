@@ -5,14 +5,15 @@
 // template internals, so improvements to it reach existing courses when they
 // pull template updates.
 //
-//   title       first heading of content/index.md, else the repo name
+//   title       `title` in a Jupyter Book's _config.yml, else the first heading of
+//               the home page (content/index.md, or the book's root), else the repo name
 //   description content/index.md front-matter `description`, else its first paragraph
 //   siteUrl     VITE_SITE_URL, computed from GITHUB_REPOSITORY in the deploy workflow
 //   auxLinks    LUMI AIF constant
 //   copyright   LUMI AIF constant, year from the build date
 //   fundingNotice LUMI AIF constant
 
-import { findPage, firstHeading, getPageDescription } from "./content";
+import { bookSiteName, findPage, firstHeading, getPageDescription } from "./content";
 
 /** Used only when content/index.md has no heading and no repo name is known. */
 const FALLBACK_TITLE = "LUMI AI Factory Learning Materials";
@@ -33,7 +34,7 @@ function repoNameFromBasePath(): string {
 
 function deriveTitle(): string {
   const home = findPage("");
-  const heading = home ? firstHeading(home.body) : "";
+  const heading = bookSiteName || (home ? firstHeading(home.body) : "");
   return heading || repoNameFromBasePath() || FALLBACK_TITLE;
 }
 

@@ -1,6 +1,7 @@
 import { blockSlug, splitPageBlocks } from "./page-blocks";
 import { isNotebookPath, notebookToMarkdown } from "./notebook";
-import { EXERCISES_SLUG, exercisesMarkdown, exercisesSlug, isExercisesPath } from "./exercises";
+import { bookMarkdown, bookTitle, readBook } from "./book";
+import { configRaw, files as bookFiles, tocRaw } from "virtual:book";
 
 /**
  * Let authors size a collapsible title with normal markdown:
@@ -62,24 +63,36 @@ export interface Page {
    * in, so it needs no `parent` of its own.
    */
   parentSlug?: string;
+  /** Set on a top-level page of a Jupyter Book: the `caption` of the TOC part
+   *  it belongs to, shown as a heading above that part in the sidebar. */
+  caption?: string;
 }
 
-const rawModules = import.meta.glob(["/content/**/*.{md,ipynb}", "/exercises/**/*.{md,ipynb}"], {
+const contentModules = import.meta.glob("/content/**/*.{md,ipynb}", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-/** True when `exercises/` has a README.md, the page its other pages nest under. */
-const hasExercisesSection = Object.keys(rawModules).some(
-  (filePath) =>
-    isExercisesPath(filePath.slice(1)) && exercisesSlug(filePath.slice(1)) === EXERCISES_SLUG,
+/** The Jupyter Book `_toc.yml` describes, when there is one: see `book.ts`. */
+const book = readBook(
+  tocRaw,
+  (path) => path in bookFiles,
+  (message) => console.warn(`[content] ${message}`),
 );
 
+/** A book is the whole site: with a `_toc.yml`, `content/` is not read. */
+const rawModules: Record<string, string> = book
+  ? Object.fromEntries(book.pages.map((page) => [`/${page.path}`, bookFiles[page.path]]))
+  : contentModules;
+
+/** The site's name from a book's `_config.yml`; "" without one, in which case
+ *  the home page's heading names the site as usual. */
+export const bookSiteName = book ? bookTitle(configRaw) : "";
+
 function fileToSlug(filePath: string): string {
-  // "/exercises/README.md" -> "exercises"
-  // "/exercises/07_rag.ipynb" -> "exercises/07_rag"
-  if (isExercisesPath(filePath.slice(1))) return exercisesSlug(filePath.slice(1));
+  // "/material/01_LLMs.ipynb" -> "material/01_LLMs", as `_toc.yml` places it
+  if (book) return book.slugOf(filePath.slice(1)) ?? "";
   // "/content/index.md" -> ""
   // "/content/chapter1.md" -> "chapter1"
   // "/content/sub/page.md" -> "sub/page"
@@ -97,36 +110,46 @@ function fileToSlug(filePath: string): string {
  * A `.ipynb` file is a page too: it is converted to markdown on the way in and
  * is indistinguishable from a `.md` file from here on.
  *
- * The `exercises/` folder is read the same way, as a section of its own: see
- * `exercises.ts`.
+ * With a `_toc.yml`, the pages are the files it lists instead, read where they
+ * are and placed where the TOC puts them: see `book.ts`.
  */
 export const pages: Page[] = Object.entries(rawModules)
   .flatMap(([filePath, raw]) => {
     const path = filePath.replace(/^\//, "");
     const fileSlug = fileToSlug(filePath);
     const warn = (message: string) => console.warn(`[content] ${path}: ${message}`);
-    const inExercises = isExercisesPath(path);
-    const text = inExercises
-      ? exercisesMarkdown(raw, path, warn)
+    const text = book
+      ? bookMarkdown(raw, path, book, warn)
       : isNotebookPath(filePath)
         ? notebookToMarkdown(raw, filePath.replace(/^\/content\//, ""), warn)
         : raw;
-    // Every exercise page sits under the section's own page (its README),
-    // unless its front matter names a different `parent`.
-    const sectionParent =
-      inExercises && hasExercisesSection && fileSlug !== EXERCISES_SLUG
-        ? { parentSlug: EXERCISES_SLUG }
-        : {};
+    // In a book the TOC, not the file, decides order, nesting and caption.
+    const entry = book?.page(path);
     const blocks = splitPageBlocks(text, warn);
-    return blocks.map((block, i) => ({
-      slug: i === 0 ? fileSlug : blockSlug(block.data, fileSlug, i),
-      path,
-      frontmatter: block.data as unknown as PageFrontmatter,
-      body: expandSummaryHeadings(block.content),
-      // Written inside `fileSlug`'s file, so it hangs under that page. Sorting
-      // below is stable, which keeps blocks in the order they were written.
-      ...(i === 0 ? (block.data.parent ? {} : sectionParent) : { parentSlug: fileSlug }),
-    }));
+    return blocks.map((block, i) => {
+      if (i > 0) {
+        return {
+          slug: blockSlug(block.data, fileSlug, i),
+          path,
+          frontmatter: block.data as unknown as PageFrontmatter,
+          body: expandSummaryHeadings(block.content),
+          // Written inside `fileSlug`'s file, so it hangs under that page. Sorting
+          // below is stable, which keeps blocks in the order they were written.
+          parentSlug: fileSlug,
+        };
+      }
+      const frontmatter = entry
+        ? { ...block.data, nav_order: entry.navOrder, ...(entry.title && { title: entry.title }) }
+        : block.data;
+      return {
+        slug: fileSlug,
+        path,
+        frontmatter: frontmatter as unknown as PageFrontmatter,
+        body: expandSummaryHeadings(block.content),
+        ...(entry?.parentSlug !== undefined && { parentSlug: entry.parentSlug }),
+        ...(entry?.caption && { caption: entry.caption }),
+      };
+    });
   })
   .sort((a, b) => (a.frontmatter.nav_order ?? 999) - (b.frontmatter.nav_order ?? 999));
 

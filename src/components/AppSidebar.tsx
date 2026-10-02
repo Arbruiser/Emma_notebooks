@@ -7,6 +7,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
@@ -37,8 +38,25 @@ function useCloseMobileNav() {
   }, [isMobile, setOpenMobile]);
 }
 
+/**
+ * Top-level pages in runs that share a caption. A Jupyter Book's TOC splits
+ * its chapters into captioned parts ("Materials", "Exercises"), and each part
+ * gets its own sidebar group with that caption as its heading. Pages without a
+ * caption (everything in a `content/` site) make one unlabelled group.
+ */
+function groupByCaption(tree: NavNode[]): { caption?: string; nodes: NavNode[] }[] {
+  const groups: { caption?: string; nodes: NavNode[] }[] = [];
+  for (const node of tree) {
+    const last = groups[groups.length - 1];
+    if (last && last.caption === node.page.caption) last.nodes.push(node);
+    else groups.push({ caption: node.page.caption, nodes: [node] });
+  }
+  return groups;
+}
+
 export function AppSidebar() {
   const tree = React.useMemo(() => buildNavTree(), []);
+  const groups = React.useMemo(() => groupByCaption(tree), [tree]);
   const glossary = React.useMemo(() => findPage("glossary"), []);
   const pathname = useRouterState({
     // Strip the trailing slash (trailingSlash: "always") so comparisons
@@ -56,15 +74,18 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {tree.map((node) => (
-                <NavItem key={node.page.slug} node={node} pathname={pathname} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {groups.map((group, i) => (
+          <SidebarGroup key={`${i}-${group.caption ?? ""}`}>
+            {group.caption && <SidebarGroupLabel>{group.caption}</SidebarGroupLabel>}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.nodes.map((node) => (
+                  <NavItem key={node.page.slug} node={node} pathname={pathname} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       {glossary && (
         <SidebarFooter className="border-t border-sidebar-border">

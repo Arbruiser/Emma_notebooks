@@ -272,7 +272,7 @@ export interface NotebookOptions {
   onImage?: (fileName: string) => void;
   /** Leave picture paths as the notebook wrote them instead of pointing them
    *  at `public/assets/`. For a folder whose files are served from where they
-   *  are, such as `exercises/`, which rewrites every path itself. */
+   *  are, as a Jupyter Book's are: `book.ts` rewrites every path itself. */
   keepImagePaths?: boolean;
 }
 

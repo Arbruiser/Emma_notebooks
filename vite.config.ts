@@ -13,12 +13,7 @@ import type { Plugin } from "vite";
 // file and the app split markdown into pages by exactly the same rule.
 import { pageSlugs } from "./src/lib/page-blocks";
 import { isNotebookPath, notebookToMarkdown } from "./src/lib/notebook";
-import {
-  EXERCISES_DIR,
-  exercisesMarkdown,
-  exercisesSlug,
-  isExercisesPath,
-} from "./src/lib/exercises";
+import { CONFIG_FILE, TOC_FILE, bookMarkdown, readBook, type Book } from "./src/lib/book";
 
 const basePath = process.env.VITE_BASE_PATH || "/";
 
@@ -41,19 +36,36 @@ function isPageFile(filePath: string): boolean {
   return filePath.endsWith(".md") || isNotebookPath(filePath);
 }
 
-/** Every file that is a page: markdown or a Jupyter notebook, in `content/`
- *  or in `exercises/`. */
-function walkPages(): string[] {
-  return [...walkFiles("content"), ...walkFiles(EXERCISES_DIR)].filter(isPageFile);
-}
-
 /** Path relative to the repository root, with forward slashes. */
 function repoPath(filePath: string): string {
   return relative(process.cwd(), filePath).replace(/\\/g, "/");
 }
 
+/** A repo-relative file's text, or undefined when it does not exist. */
+function readIfExists(path: string): string | undefined {
+  return existsSync(path) ? readFileSync(path, "utf-8") : undefined;
+}
+
+/**
+ * The Jupyter Book `_toc.yml` describes, or undefined when there is none and
+ * the site is built from `content/`. Read afresh on every call, so the dev
+ * server follows edits to the TOC. Silent: `content.ts` reads the same TOC for
+ * the app and reports any problem with it there.
+ */
+function loadBook(): Book | undefined {
+  return readBook(readIfExists(TOC_FILE), (path) => existsSync(path) && statSync(path).isFile());
+}
+
+/** Every file that is a page: those `_toc.yml` lists, or else the markdown and
+ *  notebooks in `content/`. */
+function walkPages(): string[] {
+  const book = loadBook();
+  return book ? book.pages.map((page) => page.path) : walkFiles("content").filter(isPageFile);
+}
+
 function fileToSlug(filePath: string): string {
-  if (isExercisesPath(repoPath(filePath))) return exercisesSlug(repoPath(filePath));
+  const book = loadBook();
+  if (book) return book.slugOf(repoPath(filePath)) ?? "";
   const rel = relative("content", filePath).replace(/\\/g, "/").replace(/\.(md|ipynb)$/, "");
   return rel === "index" ? "" : rel;
 }
@@ -65,7 +77,8 @@ function fileToSlug(filePath: string): string {
  */
 function pageMarkdown(filePath: string, onImage?: (fileName: string) => void): string {
   const raw = readFileSync(filePath, "utf-8");
-  if (isExercisesPath(repoPath(filePath))) return exercisesMarkdown(raw, repoPath(filePath));
+  const book = loadBook();
+  if (book) return bookMarkdown(raw, repoPath(filePath), book);
   if (!isNotebookPath(filePath)) return raw;
   const rel = relative("content", filePath).replace(/\\/g, "/");
   return notebookToMarkdown(raw, rel, undefined, { onImage });
@@ -94,7 +107,7 @@ function notebookImagesPlugin(): Plugin {
   return {
     name: "lumi-notebook-images",
     buildStart() {
-      if (reported) return;
+      if (reported || loadBook()) return;
       reported = true;
       const missing = new Map<string, Set<string>>();
       for (const filePath of walkFiles("content").filter(isNotebookPath)) {
@@ -115,46 +128,96 @@ function notebookImagesPlugin(): Plugin {
   };
 }
 
+const BOOK_MODULE = "virtual:book";
+const RESOLVED_BOOK_MODULE = `\0${BOOK_MODULE}`;
+
 /**
- * Publish the files of `exercises/` at their own paths, so a picture the
- * notebooks show as `./images/plot.png` is served at
- * `<site>/exercises/images/plot.png`, and a data file or the notebook itself can
- * be downloaded from beside the page that links to it. In dev the files are
- * served straight from the folder, so a change shows on the next reload.
- *
- * Also warns, once per build, about any file an exercise page links to that is
- * missing, since the page would build fine and the link would simply be dead.
+ * Hand the Jupyter Book to the app as `virtual:book`: the TOC, the config, and
+ * the text of exactly the files the TOC lists. Reading them here rather than
+ * with `import.meta.glob` keeps everything else in the repository, which a
+ * glob over the whole of it would sweep up, out of the site's bundle. In dev,
+ * editing the TOC or any page reloads the browser with the change.
  */
-function exercisesFilesPlugin(): Plugin {
-  let reported = false;
+function bookModulePlugin(): Plugin {
   return {
-    name: "lumi-exercises-files",
+    name: "lumi-book-module",
+    resolveId: (id) => (id === BOOK_MODULE ? RESOLVED_BOOK_MODULE : undefined),
+    load(id) {
+      if (id !== RESOLVED_BOOK_MODULE) return undefined;
+      const book = loadBook();
+      const files = Object.fromEntries(
+        (book?.pages ?? []).map((page) => [page.path, readFileSync(page.path, "utf-8")]),
+      );
+      return [
+        `export const tocRaw = ${JSON.stringify(readIfExists(TOC_FILE))};`,
+        `export const configRaw = ${JSON.stringify(readIfExists(CONFIG_FILE))};`,
+        `export const files = ${JSON.stringify(files)};`,
+      ].join("\n");
+    },
+    configureServer(server) {
+      const refresh = (file: string) => {
+        const path = repoPath(file);
+        const book = loadBook();
+        if (path !== TOC_FILE && path !== CONFIG_FILE && !book?.page(path)) return;
+        for (const environment of Object.values(server.environments)) {
+          const module = environment.moduleGraph.getModuleById(RESOLVED_BOOK_MODULE);
+          if (module) environment.moduleGraph.invalidateModule(module);
+        }
+        server.ws.send({ type: "full-reload" });
+      };
+      server.watcher.on("change", refresh);
+      server.watcher.on("add", refresh);
+      server.watcher.on("unlink", refresh);
+    },
+  };
+}
+
+/**
+ * Publish the folders a Jupyter Book's pages live in at their own paths, so a
+ * picture a notebook shows as `./images/plot.png` is served at
+ * `<site>/material/images/plot.png`, and a data file or the notebook itself can
+ * be downloaded from beside the page that links to it. In dev the files are
+ * served straight from the folders, so a change shows on the next reload.
+ *
+ * Also warns, once per build, about any file a page links to that is missing
+ * or not published, since the page would build fine and the link would simply
+ * be dead.
+ */
+function bookFilesPlugin(): Plugin {
+  let reported = false;
+  const isPublished = (book: Book, path: string) =>
+    path.startsWith("public/") || book.folders.some((folder) => path.startsWith(`${folder}/`));
+  return {
+    name: "lumi-book-files",
     buildStart() {
-      if (reported) return;
+      const book = loadBook();
+      if (reported || !book) return;
       reported = true;
-      for (const filePath of walkFiles(EXERCISES_DIR).filter(isPageFile)) {
+      for (const page of book.pages) {
         const missing = new Set<string>();
-        exercisesMarkdown(readFileSync(filePath, "utf-8"), repoPath(filePath), undefined, {
+        bookMarkdown(readFileSync(page.path, "utf-8"), page.path, book, undefined, {
           onFile: (target) => {
-            const published = isExercisesPath(target) || target.startsWith("public/");
-            if (!published || !existsSync(target)) missing.add(target);
+            if (!isPublished(book, target) || !existsSync(target)) missing.add(target);
           },
         });
         if (missing.size) {
           console.warn(
-            `[content] ${repoPath(filePath)}: links to ${[...missing].join(", ")}, which is not in exercises/ (or public/), so the link or picture is broken on the site.`,
+            `[content] ${page.path}: links to ${[...missing].join(", ")}, which is missing or outside the published folders (${book.folders.join(", ")}, public), so the link or picture is broken on the site.`,
           );
         }
       }
     },
     configureServer(server) {
-      const prefix = joinUrl(basePath, `${EXERCISES_DIR}/`);
       server.middlewares.use((req, res, next) => {
+        const book = loadBook();
+        const prefix = joinUrl(basePath, "/");
         const url = decodeURIComponent((req.url ?? "").split(/[?#]/, 1)[0]);
-        if (!url.startsWith(prefix)) return next();
-        const file = normalize(join(EXERCISES_DIR, url.slice(prefix.length))).replace(/\\/g, "/");
-        // Outside the folder, or a README (a page, served by the app): not ours.
-        if (!file.startsWith(`${EXERCISES_DIR}/`) || file.endsWith(".md")) return next();
+        if (!book || !url.startsWith(prefix)) return next();
+        const file = normalize(url.slice(prefix.length)).replace(/\\/g, "/");
+        // Markdown files are pages, served by the app.
+        if (!isPublished(book, file) || file.startsWith("public/") || file.endsWith(".md")) {
+          return next();
+        }
         if (!existsSync(file) || !statSync(file).isFile()) return next();
         const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
         res.setHeader("Content-Type", type);
@@ -164,8 +227,9 @@ function exercisesFilesPlugin(): Plugin {
     // The client build is what gets published; the server build needs none of it.
     applyToEnvironment: (environment) => environment.name === "client",
     generateBundle() {
-      for (const file of walkFiles(EXERCISES_DIR)) {
-        // A README is a page, not a download; everything else ships as is.
+      const book = loadBook();
+      for (const file of (book?.folders ?? []).flatMap((folder) => walkFiles(folder))) {
+        // Markdown files are pages; everything else ships as is.
         if (file.endsWith(".md")) continue;
         this.emitFile({ type: "asset", fileName: repoPath(file), source: readFileSync(file) });
       }
@@ -173,7 +237,7 @@ function exercisesFilesPlugin(): Plugin {
   };
 }
 
-/** Content types for the files the dev server hands out from `exercises/`. */
+/** Content types for the files the dev server hands out from a book's folders. */
 const MIME: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -300,7 +364,8 @@ export default defineConfig({
     }),
     viteReact(),
     notebookImagesPlugin(),
-    exercisesFilesPlugin(),
+    bookModulePlugin(),
+    bookFilesPlugin(),
     sitemapPlugin(),
   ],
 });
